@@ -218,17 +218,23 @@ public class VoiceConnectionService extends ConnectionService {
     @Override
     public Connection onCreateOutgoingConnection(PhoneAccountHandle connectionManagerPhoneAccount, ConnectionRequest request) {
         VoiceConnectionService.hasOutgoingCall = true;
-        String uuid = UUID.randomUUID().toString();
 
-        Log.d(TAG, "[VoiceConnectionService] onCreateOutgoingConnection, uuid:" + uuid);
+        Bundle extras = request.getExtras();
+        String callUUID = extras.getString(EXTRA_CALL_UUID);
+
+        if(callUUID == null || callUUID == ""){
+          callUUID = UUID.randomUUID().toString();
+        }
+
+        Log.d(TAG, "[VoiceConnectionService] onCreateOutgoingConnection, uuid:"  + callUUID);
 
         if (!isInitialized && !isReachable) {
-            this.notReachableCallUuid = uuid;
+            this.notReachableCallUuid = callUUID;
             this.currentConnectionRequest = request;
             this.checkReachability();
         }
 
-        return this.makeOutgoingCall(request, uuid, false);
+        return this.makeOutgoingCall(request, callUUID, false);
     }
 
     private Connection makeOutgoingCall(ConnectionRequest request, String uuid, Boolean forceWakeUp) {
@@ -376,18 +382,22 @@ public class VoiceConnectionService extends ConnectionService {
         // Avoid to call wake up the app again in wakeUpAfterReachabilityTimeout.
         this.currentConnectionRequest = null;
 
-        Intent headlessIntent = new Intent(
-            this.getApplicationContext(),
-            RNCallKeepBackgroundMessagingService.class
-        );
-        headlessIntent.putExtra("callUUID", uuid);
-        headlessIntent.putExtra("name", displayName);
-        headlessIntent.putExtra("handle", number);
+        try {
+            Intent headlessIntent = new Intent(
+                this.getApplicationContext(),
+                RNCallKeepBackgroundMessagingService.class
+            );
+            headlessIntent.putExtra("callUUID", uuid);
+            headlessIntent.putExtra("name", displayName);
+            headlessIntent.putExtra("handle", number);
 
-        ComponentName name = this.getApplicationContext().startService(headlessIntent);
-        if (name != null) {
-          Log.d(TAG, "[VoiceConnectionService] wakeUpApplication, acquiring lock for application:" + name);
-          HeadlessJsTaskService.acquireWakeLockNow(this.getApplicationContext());
+            ComponentName name = this.getApplicationContext().startService(headlessIntent);
+            if (name != null) {
+              Log.d(TAG, "[VoiceConnectionService] wakeUpApplication, acquiring lock for application:" + name);
+              HeadlessJsTaskService.acquireWakeLockNow(this.getApplicationContext());
+            }
+        } catch (Exception e) {
+          Log.w(TAG, "[VoiceConnectionService] wakeUpApplication, error" + e.toString());
         }
     }
 
